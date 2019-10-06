@@ -2,7 +2,7 @@
 
 ### $1 is name storageclass that will be used to create pvc
 ### $2 is No of nginx pods
-### eg. sh fedora-create-dc-with-pvc.sh sc_name 2
+### eg. sh nginx-pod-with-pvc.sh sc_name 2
 
 
 sc_name=$1
