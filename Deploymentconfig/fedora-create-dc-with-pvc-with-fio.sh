@@ -2,7 +2,7 @@
 
 ### $1 is name storageclass that will be used to create pvc
 ### $2 is No of dc pods
-### eg. sh fedora-create-dc-with-pvc.sh sc_name 2
+### eg. sh fedora-create-dc-with-pvc-with-fio.sh sc_name 2
 
 
 sc_name=$1
@@ -30,7 +30,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 3Gi
+      storage: 6Gi
   storageClassName: $sc_name" | oc create --recursive=true -f -
 }
 
