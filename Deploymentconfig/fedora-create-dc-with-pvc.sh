@@ -30,7 +30,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 3Gi
+      storage: 5Gi
   storageClassName: $sc_name" | oc create --recursive=true -f -
 }
 
@@ -154,5 +154,3 @@ do
 	create_fedora_pod
 done	
 
-printf "\nChecking Status of pod\n"
-check_pod_status
