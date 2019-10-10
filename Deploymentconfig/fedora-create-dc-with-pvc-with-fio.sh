@@ -130,13 +130,13 @@ run_fio ()
 {
 	for pod_name in $(oc get po --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
 	do
+		printf "\n Coping script on pod $pod_name"
 		OUTPUT=$(oc cp run-fio.sh $pod_name:/mnt/)
 		verify_output $OUTPUT
 	done
 	for pod_name in $(oc get po --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
         do
-		OUTPUT=$(oc rsh $pod_name sh /mnt/run-fio.sh &)
-		verify_output $OUTPUT
+		OUTPUT=$(oc rsh $pod_name sh /mnt/run-fio.sh &) &
         done
 
 }
