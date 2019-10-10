@@ -30,7 +30,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 6Gi
+      storage: 5Gi
   storageClassName: $sc_name" | oc create --recursive=true -f -
 }
 
@@ -66,10 +66,6 @@ spec:
         volumeMounts:
         - mountPath: /mnt
           name: fedora-vol
-        lifecycle:
-          postStart:
-            exec:
-              command: ['/bin/sh', '-c', 'yum install fio -y && fio --name=fio-rand-readwrite --filename=/mnt/fio-rand-readwrite --readwrite=randrw --bs=4K --direct=1 --numjobs=1 --time_based=1 --runtime=60 --size=4G --iodepth=4 --invalidate=1 --fsync_on_close=1 --rwmixread=75 --ioengine=libaio --output-format=json --output /mnt/fio_result.json']
         livenessProbe:
           exec:
             command:
@@ -116,7 +112,7 @@ check_pod_status ()
 				printf "\n\nPod fedorapod-$index reached Running State\n\n"
 				break
 			else				
-				COUNT=$(expr 30 - $cnt)
+				COUNT=$(expr 60 - $cnt)
 				printf "Retry left $COUNT..."
 				printf "Retrying After 5 sec..\n"
 				if [ $COUNT == "0" ]
@@ -128,6 +124,21 @@ check_pod_status ()
 		done
 		
 	done
+}
+
+run_fio ()
+{
+	for pod_name in $(oc get po --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
+	do
+		OUTPUT=$(oc cp run-fio.sh $pod_name:/mnt/)
+		verify_output $OUTPUT
+	done
+	for pod_name in $(oc get po --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
+        do
+		OUTPUT=$(oc rsh $pod_name sh /mnt/run-fio.sh &)
+		verify_output $OUTPUT
+        done
+
 }
 
 project_name=namespace-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 4 | head -n 1)
@@ -158,3 +169,7 @@ do
 	create_fedora_pod
 done	
 
+printf "\nChecking Status of pod\n"
+check_pod_status
+printf "\n Running Fio script"
+run_fio
