@@ -40,14 +40,14 @@ create_fedora_pod ()
 echo "kind: DeploymentConfig
 apiVersion: apps.openshift.io/v1
 metadata:
-  name: fedorapod-$index
+  name: ${FEDORA_POD_LIST[$index]}
   labels:
-    app: fedorapod-$index
+    app: ${FEDORA_POD_LIST[$index]}
 spec:
   template:
     metadata:
       labels:
-        name: fedorapod-$index
+        name: ${FEDORA_POD_LIST[$index]}
     spec:
       serviceAccountName: $service_account
       restartPolicy: Always
@@ -101,15 +101,15 @@ check_status_pvc ()
 
 check_pod_status ()
 {
-	for index in $(seq 1 $no_of_pods)
+	for index in "${FEDORA_POD_LIST[@]}"
 	do
 		for cnt in {1..30}
 		do	
-			status=$(oc get pod --selector=name=fedorapod-$index -o custom-columns=:.status.phase |tr -d '\n')
+			status=$(oc get pod --selector=name=$index -o custom-columns=:.status.phase |tr -d '\n')
 
 			if [[ $status == "Running" ]]
 			then
-				printf "\n\nPod fedorapod-$index reached Running State\n\n"
+				printf "\n\nPod $index reached Running State\n\n"
 				break
 			else				
 				COUNT=$(expr 60 - $cnt)
@@ -117,7 +117,7 @@ check_pod_status ()
 				printf "Retrying After 5 sec..\n"
 				if [ $COUNT == "0" ]
 				then
-					printf "Pod fedorapod-$index Failed to reached Running State\n"
+					printf "Pod $index Failed to reached Running State\n"
 				fi				
 			fi
 			sleep 5
@@ -165,11 +165,12 @@ do
 	printf "\nCreating pvc with name $pvc_name\n"
 	create_pvc 
 	check_status_pvc
-	printf "\nCreating Pod with name fedorapod-$index\n"
+	FEDORA_POD_LIST[$index]=fedorapod-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
+	printf "\nCreating Pod with name ${FEDORA_POD_LIST[$index]}\n"
 	create_fedora_pod
 done	
 
 printf "\nChecking Status of pod\n"
-check_pod_status
+check_pod_status $FEDORA_POD_LIST
 printf "\n Running Fio script"
 run_fio
