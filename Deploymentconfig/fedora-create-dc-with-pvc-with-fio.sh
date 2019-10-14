@@ -53,6 +53,7 @@ echo "kind: DeploymentConfig
 apiVersion: apps.openshift.io/v1
 metadata:
   name: ${FEDORA_POD_LIST[$index]}
+  namespace: $project_name
   labels:
     app: ${FEDORA_POD_LIST[$index]}
 spec:
@@ -117,7 +118,7 @@ check_pod_status ()
 	do
 		for cnt in {1..30}
 		do	
-			status=$(oc get pod --selector=name=$index -o custom-columns=:.status.phase |tr -d '\n')
+			status=$(oc get pod -n $project_name --selector=name=$index -o custom-columns=:.status.phase |tr -d '\n')
 
 			if [[ $status == "Running" ]]
 			then
@@ -140,15 +141,15 @@ check_pod_status ()
 
 run_fio ()
 {
-	for pod_name in $(oc get po --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
+	for pod_name in $(oc get po -n $project_name --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
 	do
 		printf "\n Coping script on pod $pod_name"
-		OUTPUT=$(oc cp run-fio.sh $pod_name:/mnt/)
+		OUTPUT=$(oc cp run-fio.sh $project_name/$pod_name:/mnt/)
 		verify_output $OUTPUT
 	done
-	for pod_name in $(oc get po --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
+	for pod_name in $(oc get po -n $project_name --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
         do
-		OUTPUT=$(oc rsh $pod_name sh /mnt/run-fio.sh &) &
+		OUTPUT=$(oc -n $project_name rsh $pod_name sh /mnt/run-fio.sh &) &
         done
 
 }
