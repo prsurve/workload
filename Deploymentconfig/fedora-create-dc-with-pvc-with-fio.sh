@@ -2,11 +2,22 @@
 
 ### $1 is name storageclass that will be used to create pvc
 ### $2 is No of dc pods
-### eg. sh fedora-create-dc-with-pvc-with-fio.sh sc_name 2
+### eg. sh fedora-create-dc-with-pvc-with-fio.sh sc_name 2 project_name
+### project_name is optional
 
 
 sc_name=$1
 no_of_pods=$2
+if [ -z "$sc_name" ]
+then
+	printf "You need to pass storageclass Name\n"
+	exit 1
+fi
+if [ -z "$no_of_pods" ]
+then
+      printf "You need to pass No of required Pod\n"
+      exit 1
+fi
 verify_output ()
 {
 	if [ $? -eq 0 ]
@@ -14,6 +25,7 @@ verify_output ()
 	  printf "\nCommand Executed successfully"
 	else
 	  printf "\nCommand Failed:- $OUTPUT" >&2
+	  exit 1
 	fi	
 }
 
@@ -141,11 +153,17 @@ run_fio ()
 
 }
 
-project_name=namespace-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 4 | head -n 1)
-printf "\nCreated new Project with name $project_name" 
-OUTPUT=$(oc new-project $project_name 2>&1)
+if [ -z "$3" ]
+then
+	project_name=namespace-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 4 | head -n 1)
+	printf "\nCreated new Project with name $project_name" 
+	OUTPUT=$(oc new-project $project_name 2>&1)
+	verify_output $OUTPUT
+else
+	project_name=$3
+	printf "\nUsing $project_name for creation"
+fi
 
-verify_output $OUTPUT
 service_account=sa-name-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 4 | head -n 1)
 printf "\nCreating serviceaccount with name $service_account"
 OUTPUT=$(oc create serviceaccount $service_account -n $project_name 2>&1)
