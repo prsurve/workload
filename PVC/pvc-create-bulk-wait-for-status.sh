@@ -40,7 +40,7 @@ check_status_pvc ()
 }
 
 
-for index in $(seq 1 $no_of_pods)
+for index in $(seq 1 $no_of_pvc)
 do
 	pvc_name=pvc-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
 	printf "\nCreating pvc with name $pvc_name\n"
