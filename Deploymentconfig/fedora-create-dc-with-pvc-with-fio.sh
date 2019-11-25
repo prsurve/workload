@@ -145,14 +145,16 @@ check_pod_status ()
 
 run_fio ()
 {
-	for pod_name in $(oc get po -n $project_name --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
+	for index in "${FEDORA_POD_LIST[@]}"
 	do
+		pod_name=$(oc get pod -n $project_name --selector=name=$index -o custom-columns=:.metadata.name |tr -d '\n')
 		printf "\n Coping script on pod $pod_name"
-		OUTPUT=$(oc cp run-fio.sh $project_name/$pod_name:/mnt/)
-		verify_output $OUTPUT
+                OUTPUT=$(oc cp run-fio.sh $project_name/$pod_name:/mnt/)
+                verify_output $OUTPUT
 	done
-	for pod_name in $(oc get po -n $project_name --no-headers |grep -v "deploy" |grep "Running" |awk '{print$1}')
+	for index in "${FEDORA_POD_LIST[@]}"
         do
+		pod_name=$(oc get pod -n $project_name --selector=name=$index -o custom-columns=:.metadata.name |tr -d '\n') 
 		OUTPUT=$(oc -n $project_name rsh $pod_name sh /mnt/run-fio.sh &) &
         done
 
