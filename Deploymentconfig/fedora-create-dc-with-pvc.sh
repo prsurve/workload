@@ -210,5 +210,3 @@ done
 
 printf "\nChecking Status of pod\n"
 check_pod_status $FEDORA_POD_LIST
-
-

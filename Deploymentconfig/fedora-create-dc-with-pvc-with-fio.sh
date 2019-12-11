@@ -252,4 +252,3 @@ printf "\nChecking Status of pod\n"
 check_pod_status $FEDORA_POD_LIST
 printf "\n Running Fio script"
 run_fio
-
