@@ -186,7 +186,7 @@ provisioner=$(oc get sc $sc_name -o custom-columns=:.provisioner|tr -d '\n'|cut 
 
 for index in $(seq 1 $no_of_pods)
 do
-        pvc_name=pvc-$provisioner-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
+	pvc_name=pvc-$provisioner-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
 	printf "\nCreating pvc with name $pvc_name\n"
 	create_pvc 
 	check_status_pvc
