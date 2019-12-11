@@ -29,7 +29,15 @@ verify_output ()
 	fi	
 }
 
+pvc_type[0]="ReadWriteOnce"
+pvc_type[1]="ReadWriteMany"
 
+mount_type[0]="volumeMounts:
+        - mountPath: /mnt
+          name: fedora-vol"
+mount_type[1]="volumeDevices:
+        - devicePath: /dev/rbdblock
+          name: fedora-vol"
 create_pvc ()
 {
 echo "kind: PersistentVolumeClaim
@@ -39,13 +47,13 @@ metadata:
   namespace: $project_name
 spec:
   accessModes:
-    - ReadWriteOnce
+    - $selected_mode
+  $if_block_mode
   resources:
     requests:
       storage: 5Gi
   storageClassName: $sc_name" | oc create --recursive=true -f -
 }
-
 
 create_fedora_pod ()
 {
@@ -79,9 +87,7 @@ spec:
             cpu: "150m"
         command: ['/bin/bash', '-ce', 'tail -f /dev/null']
         imagePullPolicy: IfNotPresent
-        volumeMounts:
-        - mountPath: /mnt
-          name: fedora-vol
+        $selected_mount_mode
         livenessProbe:
           exec:
             command:
@@ -148,13 +154,37 @@ run_fio ()
 	do
 		pod_name=$(oc get pod -n $project_name --selector=name=$index -o custom-columns=:.metadata.name |tr -d '\n')
 		printf "\n Coping script on pod $pod_name"
-                OUTPUT=$(oc cp run-fio.sh $project_name/$pod_name:/mnt/)
+		tmp_pod_interface=$(printf $pod_name|cut -d "-" -f2)
+		tmp_pod_mode=$(printf $pod_name|cut -d "-" -f3)
+				if [[ $tmp_pod_interface == "rbd" ]]
+				then
+					if [[ $tmp_pod_mode == "rwx" ]]
+					then
+						OUTPUT=$(oc cp run-fio-rwx.sh $project_name/$pod_name:/mnt/)
+					else
+						OUTPUT=$(oc cp run-fio.sh $project_name/$pod_name:/mnt/)
+					fi
+				else
+                	OUTPUT=$(oc cp run-fio.sh $project_name/$pod_name:/mnt/)
+                fi
                 verify_output $OUTPUT
 	done
 	for index in "${FEDORA_POD_LIST[@]}"
         do
 		pod_name=$(oc get pod -n $project_name --selector=name=$index -o custom-columns=:.metadata.name |tr -d '\n') 
-		OUTPUT=$(oc -n $project_name rsh $pod_name sh /mnt/run-fio.sh &) &
+		tmp_pod_interface=$(printf $pod_name|cut -d "-" -f2)
+		tmp_pod_mode=$(printf $pod_name|cut -d "-" -f3)
+				if [[ $tmp_pod_interface == "rbd" ]]
+				then
+					if [[ $tmp_pod_mode == "rwx" ]]
+					then
+						OUTPUT=$(oc -n $project_name rsh $pod_name sh /mnt/run-fio-rwx.sh &) &
+					else
+						OUTPUT=$(oc -n $project_name rsh $pod_name sh /mnt/run-fio.sh &) &
+					fi
+				else
+                	OUTPUT=$(oc -n $project_name rsh $pod_name sh /mnt/run-fio.sh &) &
+                fi
         done
 
 }
@@ -183,17 +213,40 @@ OUTPUT=$(oc adm policy add-scc-to-user privileged system:serviceaccount:$project
 verify_output $OUTPUT
 
 provisioner=$(oc get sc $sc_name -o custom-columns=:.provisioner|tr -d '\n'|cut -d '.' -f2 2>&1)
-
+if [[ $provisioner == "cephfs" ]]
+then
+	selected_mount_mode=${mount_type[0]}
+fi
 for index in $(seq 1 $no_of_pods)
 do
-	pvc_name=pvc-$provisioner-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
-	printf "\nCreating pvc with name $pvc_name\n"
+	selected_mode=${pvc_type[$RANDOM % ${#pvc_type[@]} ]}
+	if [[ $selected_mode == "ReadWriteOnce" ]]
+	then
+		mode="rwo"
+	elif [[ $selected_mode == "ReadWriteMany" ]]
+	then
+		mode="rwx"
+	fi
+	if [[ $provisioner == "rbd" ]]
+	then
+		if [[ $mode == "rwx" ]]
+		then
+			if_block_mode="volumeMode: Block"
+			selected_mount_mode=${mount_type[1]}
+		else
+			selected_mount_mode=${mount_type[0]}
+		fi
+	fi	
+	pvc_name=pvc-$provisioner-$mode-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
+	
+	printf "\nCreating pvc with name $pvc_name and accessModes is $mode \n"
 	create_pvc 
 	check_status_pvc
-	FEDORA_POD_LIST[$index]=fedorapod-$provisioner-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 5 | head -n 1)
+	FEDORA_POD_LIST[$index]=fedorapod-$provisioner-$mode-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 5 | head -n 1)
 	printf "\nCreating Pod with name ${FEDORA_POD_LIST[$index]}\n"
 	create_fedora_pod
-done	
+	unset if_block_mode
+done
 
 printf "\nChecking Status of pod\n"
 check_pod_status $FEDORA_POD_LIST
