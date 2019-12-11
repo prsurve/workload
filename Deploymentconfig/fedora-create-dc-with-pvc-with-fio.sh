@@ -62,6 +62,8 @@ spec:
       labels:
         name: ${FEDORA_POD_LIST[$index]}
     spec:
+      securityContext:
+        fsGroup: 2000
       serviceAccountName: $service_account
       restartPolicy: Always
       volumes:
@@ -73,13 +75,10 @@ spec:
         image: fedora
         resources:
           limits:
-            memory: "500Mi"
+            memory: "800Mi"
             cpu: "150m"
         command: ['/bin/bash', '-ce', 'tail -f /dev/null']
         imagePullPolicy: IfNotPresent
-        securityContext:
-          capabilities: {}
-          privileged: true
         volumeMounts:
         - mountPath: /mnt
           name: fedora-vol
@@ -183,14 +182,15 @@ OUTPUT=$(oc adm policy add-scc-to-user privileged system:serviceaccount:$project
 
 verify_output $OUTPUT
 
+provisioner=$(oc get sc $sc_name -o custom-columns=:.provisioner|tr -d '\n'|cut -d '.' -f2 2>&1)
 
 for index in $(seq 1 $no_of_pods)
 do
-	pvc_name=pvc-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
+	pvc_name=pvc-$provisioner-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
 	printf "\nCreating pvc with name $pvc_name\n"
 	create_pvc 
 	check_status_pvc
-	FEDORA_POD_LIST[$index]=fedorapod-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 9 | head -n 1)
+	FEDORA_POD_LIST[$index]=fedorapod-$provisioner-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 5 | head -n 1)
 	printf "\nCreating Pod with name ${FEDORA_POD_LIST[$index]}\n"
 	create_fedora_pod
 done	
