@@ -80,7 +80,7 @@ spec:
           claimName: $pvc_name
       containers:
       - name: fedora
-        image: fedora
+        image: prsurve/fedora_fio
         resources:
           limits:
             memory: "800Mi"
