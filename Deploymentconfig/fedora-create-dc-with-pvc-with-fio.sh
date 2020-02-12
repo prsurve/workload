@@ -2,12 +2,76 @@
 
 ### $1 is name storageclass that will be used to create pvc
 ### $2 is No of dc pods
-### eg. sh fedora-create-dc-with-pvc-with-fio.sh sc_name 2 project_name
+### eg. sh fedora-create-dc-with-pvc-with-fio.sh -sc sc_name -c 2 -p project_name -m rwx,rwo
 ### project_name is optional
+### -m is optional 
+
+function show_usage (){
+    printf "Usage: $0 [options [parameters]]\n"
+    printf "\n"
+    printf "Options:\n"
+    printf " -sc|--storage_class, Storageclass name\n"
+    printf " -c|--count, Count of required Pod\n"
+    printf " -p|--project_name, Project Name|Namespace\n"
+    printf " -m|--mode, PVC mode (RWX,RWO) \n"
+    printf " -h|--help, Print help\n"
+
+return 0
+}
+
+while [ ! -z "$1" ]; do
+  case "$1" in
+     -sc|--storage_class)
+         shift
+         echo "Using storage class: $1	"
+         sc_name=$1
+         ;;
+     -c|--count)
+         shift
+         no_of_pods=$1
+         if ! [[ "$no_of_pods" =~ ^[0-9]+$ ]]
+    	then
+        	printf "Required Integer value\n"
+        	exit 1
+		fi
+         echo "Pods to create: $1"         
+         ;;
+     -p|--project_name)
+        shift	
+        echo "Creating pod in  : $1"
+        project_name=$1
+         ;;
+     -m|--mode)
+        shift
+		pvc_mode=$(echo "$1" | awk '{print tolower($0)}')
+		if [[ $pvc_mode = "rwo" ]]
+		then
+			pvc_type[0]="ReadWriteOnce"
+			printf "Using $pvc_type mode for pvc creation\n"
+		elif [[ $pvc_mode = "rwx" ]]
+		then
+			pvc_type[0]="ReadWriteMany"
+			printf "Using $pvc_type mode for pvc creation\n"
+		elif [[ $pvc_mode = "any" ]]
+		then
+			pvc_type[0]="ReadWriteMany"
+			pvc_type[1]="ReadWriteOnce"
+			printf "Using RWX,RWO mode for pvc creation\n"
+		else
+			printf "Entered mode not supported or it's invalid\n"
+			printf "Valid Modes are RWX, RWO\n"
+			exit 1
+		fi
+         ;;	 
+     *)
+        show_usage
+        exit 1
+        ;;
+  esac
+shift
+done
 
 
-sc_name=$1
-no_of_pods=$2
 if [ -z "$sc_name" ]
 then
 	printf "You need to pass storageclass Name\n"
@@ -24,14 +88,16 @@ verify_output ()
 	then
 	  printf "\nCommand Executed successfully"
 	else
-	  printf "\nCommand Failed:- $OUTPUT" >&2
+	  printf "\nCommand Failed:- $OUTPUT\n" >&2
 	  exit 1
 	fi	
 }
 
-pvc_type[0]="ReadWriteOnce"
-pvc_type[1]="ReadWriteMany"
-
+if [ -z "$pvc_mode" ]
+then
+	pvc_type[0]="ReadWriteMany"
+	pvc_type[1]="ReadWriteOnce"
+fi
 mount_type[0]="volumeMounts:
         - mountPath: /mnt
           name: fedora-vol"
@@ -82,9 +148,9 @@ spec:
       - name: fedora
         image: prsurve/fedora_fio
         resources:
-          limits:
-            memory: "800Mi"
-            cpu: "150m"
+            limits:
+                memory: "800Mi"
+                cpu: "150m"  
         command: ['/bin/bash', '-ce', 'tail -f /dev/null']
         imagePullPolicy: IfNotPresent
         $selected_mount_mode
@@ -189,14 +255,13 @@ run_fio ()
 
 }
 
-if [ -z "$3" ]
+if [ -z "$project_name" ]
 then
 	project_name=namespace-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 4 | head -n 1)
 	printf "\nCreated new Project with name $project_name" 
 	OUTPUT=$(oc new-project $project_name 2>&1)
 	verify_output $OUTPUT
 else
-	project_name=$3
 	printf "\nUsing $project_name for creation"
 fi
 
@@ -215,6 +280,7 @@ verify_output $OUTPUT
 provisioner=$(oc get sc $sc_name -o custom-columns=:.provisioner|tr -d '\n'|cut -d '.' -f2 2>&1)
 if [[ $provisioner == "cephfs" ]]
 then
+
 	selected_mount_mode=${mount_type[0]}
 fi
 for index in $(seq 1 $no_of_pods)
@@ -242,6 +308,7 @@ do
 	printf "\nCreating pvc with name $pvc_name and accessModes is $mode \n"
 	create_pvc 
 	check_status_pvc
+	
 	FEDORA_POD_LIST[$index]=fedorapod-$provisioner-$mode-$(cat /dev/urandom | tr -dc 'a-z' | fold -w 5 | head -n 1)
 	printf "\nCreating Pod with name ${FEDORA_POD_LIST[$index]}\n"
 	create_fedora_pod
